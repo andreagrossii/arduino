@@ -1,41 +1,76 @@
 import csv
 from datetime import datetime
- 
+import dearpygui.dearpygui as dpg
+
+def analizza_dati(file_csv):
+    conteggio_led = {}
+    primo_ts = None
+    ultimo_ts = None
+    righe_tabella = []
+
+    try:
+        with open(file_csv, "r") as file:
+            reader = csv.reader(file)
+            for riga in reader:
+                if len(riga) != 3:
+                    continue
+
+                timestamp_str, evento, led = riga
+                conteggio_led[led] = conteggio_led.get(led, 0) + 1
+                
+                ts = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                if primo_ts is None:
+                    primo_ts = ts
+                ultimo_ts = ts
+                
+                righe_tabella.append([timestamp_str, evento, led])
+                
+        tempo_totale = ultimo_ts - primo_ts if primo_ts and ultimo_ts else "N/A"
+        return conteggio_led, primo_ts, ultimo_ts, tempo_totale, righe_tabella
+    except FileNotFoundError:
+        return {}, None, None, None, []
+
+dpg.create_context()
+
 file_csv = "eventi_led.csv"
- 
-conteggio_led = {}
-primo_ts = None
-ultimo_ts = None
- 
-with open(file_csv, "r") as file:
-    reader = csv.reader(file)
- 
-    for riga in reader:
-        if len(riga) != 3:
-            continue
- 
-        timestamp_str, evento, led = riga
- 
-        if led not in conteggio_led:
-            conteggio_led[led] = 0
-        conteggio_led[led] += 1
- 
-        ts = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
- 
-        if primo_ts is None:
-            primo_ts = ts
-        ultimo_ts = ts
- 
-tempo_totale = None
-if primo_ts and ultimo_ts:
-    tempo_totale = ultimo_ts - primo_ts
- 
-print("Conteggio LED:")
-for led, count in conteggio_led.items():
-    print(f"  {led}: {count} volte")
- 
-print("\nPrimo evento:", primo_ts)
-print("Ultimo evento:", ultimo_ts)
- 
-if tempo_totale:
-    print("Tempo totale di utilizzo:", tempo_totale)
+stats, inizio, fine, durata, log_completo = analizza_dati(file_csv)
+
+with dpg.window(label="Analizzatore Eventi LED", width=600, height=500):
+    dpg.add_text("Riepilogo Sessione", color=[100, 200, 255])
+    dpg.add_text(f"Primo evento: {inizio}")
+    dpg.add_text(f"Ultimo evento: {fine}")
+    dpg.add_text(f"Durata totale: {durata}")
+    
+    dpg.add_separator()
+    dpg.add_spacer(height=10)
+    
+    dpg.add_text("Statistiche per LED:")
+    with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True):
+        dpg.add_table_column(label="ID LED")
+        dpg.add_table_column(label="Conteggio")
+        
+        for led, count in stats.items():
+            with dpg.table_row():
+                dpg.add_text(led)
+                dpg.add_text(str(count))
+
+    dpg.add_spacer(height=10)
+    dpg.add_separator()
+    
+    with dpg.collapsing_header(label="Visualizza Log Completo"):
+        with dpg.table(header_row=True, resizable=True, scrollY=True, height=200):
+            dpg.add_table_column(label="Timestamp")
+            dpg.add_table_column(label="Evento")
+            dpg.add_table_column(label="LED")
+            
+            for riga in log_completo:
+                with dpg.table_row():
+                    dpg.add_text(riga[0])
+                    dpg.add_text(riga[1])
+                    dpg.add_text(riga[2])
+
+dpg.create_viewport(title='Monitor LED', width=650, height=550)
+dpg.setup_dearpygui()
+dpg.show_viewport()
+dpg.start_dearpygui()
+dpg.destroy_context()
